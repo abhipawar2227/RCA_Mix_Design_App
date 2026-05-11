@@ -6,6 +6,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle, Patch
 import streamlit as st
+from pathlib import Path
+import base64
 
 st.set_page_config(
     page_title="RCA Mix Design Charts Automation",
