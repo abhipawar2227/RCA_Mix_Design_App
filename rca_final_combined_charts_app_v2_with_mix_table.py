@@ -401,7 +401,7 @@ def classify_rca_quality(sg, wa):
 # PLOTTING FUNCTIONS
 # ============================================================
 
-def plot_chart1(df, grade, target, reference_wc, selected_rca, selected_wc, water_eff, slump_basis, aggregate_size):
+def plot_chart1(df, grade, target, reference_wc, selected_rca, selected_wc, water_eff, slump_basis, aggregate_size, zoom_enabled=False, xlim_min=None, xlim_max=None, ylim_min=None, ylim_max=None):
     fig, ax = plt.subplots(figsize=(12, 8))
     for rca in sorted(df["RCA replacement (%)"].unique()):
         sub = df[df["RCA replacement (%)"] == rca].sort_values("w/c ratio")
@@ -434,6 +434,14 @@ def plot_chart1(df, grade, target, reference_wc, selected_rca, selected_wc, wate
     ax.set_xlabel("Water-cement ratio")
     ax.set_ylabel("Predicted 28-day compressive strength (MPa)")
     ax.grid(True, alpha=0.30)
+
+    # Optional manual zoom for Chart 1
+    if zoom_enabled:
+        if xlim_min is not None and xlim_max is not None and xlim_min < xlim_max:
+            ax.set_xlim(xlim_min, xlim_max)
+        if ylim_min is not None and ylim_max is not None and ylim_min < ylim_max:
+            ax.set_ylim(ylim_min, ylim_max)
+
     ax.legend(ncol=2, fontsize=9, loc="lower right")
     fig.tight_layout()
     return fig
@@ -868,7 +876,7 @@ def make_final_mix_table(
 st.title("RCA Mix Design Charts Automation")
 st.write(
     "Combined app for Charts 1–6 using one common input panel. "
-    "Charts 1–4 and 6 are dynamic for M20–M40. Chart 5 checks RCA material quality. Cement base uses W50/selected w/c; batching water uses slump-corrected W_eff."
+    "Charts 1–4 and 6 are dynamic for M20–M40. Chart 5 checks RCA material quality. Cement base uses W50/selected w/c; batching water uses slump-corrected W_eff. Graph size can be kept constant, and Chart 1 has optional manual zoom."
 )
 
 with st.sidebar:
@@ -893,6 +901,21 @@ with st.sidebar:
     default_rca = 40 if 40 in available_rca else 50
     selected_rca = st.select_slider("Highlight RCA replacement (%)", options=available_rca, value=default_rca)
 
+    st.header("Graph display / zoom")
+    constant_graph_size = st.checkbox("Keep graph size constant", value=True)
+    enable_chart1_zoom = st.checkbox("Enable Chart 1 manual zoom", value=False)
+
+    if enable_chart1_zoom:
+        chart1_xmin = st.number_input("Chart 1 zoom x-min", value=float(wc_min), step=0.01, format="%.3f")
+        chart1_xmax = st.number_input("Chart 1 zoom x-max", value=float(wc_max), step=0.01, format="%.3f")
+        chart1_ymin = st.number_input("Chart 1 zoom y-min", value=20.0, step=0.5)
+        chart1_ymax = st.number_input("Chart 1 zoom y-max", value=max(float(target) + 2.0, 30.0), step=0.5)
+    else:
+        chart1_xmin = None
+        chart1_xmax = None
+        chart1_ymin = None
+        chart1_ymax = None
+
     st.header("Water and aggregate inputs")
     w50 = st.number_input("Base water for 50 mm slump, W50 (kg/m³)", value=186.0, step=1.0)
     slump = st.number_input("Required slump (mm)", value=100.0, step=5.0)
@@ -901,7 +924,7 @@ with st.sidebar:
     st.caption(f"Calculated W_eff = {water_eff_chart:.2f} kg/m³")
 
     air_percent = st.number_input("Air content (%)", value=0.5, step=0.1)
-    ca_fraction = st.number_input("CA volume fraction", value=0.62, step=0.01)
+    ca_fraction = st.number_input("CA volume fraction", value=0.620, step=0.001, format="%.3f")
 
     st.header("Material properties")
     sg_cement = st.number_input("Cement specific gravity", value=3.15, step=0.01)
@@ -975,15 +998,30 @@ figures = {}
 
 with tab1:
     st.subheader("Chart 1: Predictive Strength vs w/c Ratio")
-    fig1 = plot_chart1(chart1_df, grade, target, reference_wc, selected_rca, selected_wc, water_eff_chart, slump, aggregate_size)
+    fig1 = plot_chart1(
+        chart1_df,
+        grade,
+        target,
+        reference_wc,
+        selected_rca,
+        selected_wc,
+        water_eff_chart,
+        slump,
+        aggregate_size,
+        zoom_enabled=enable_chart1_zoom,
+        xlim_min=chart1_xmin,
+        xlim_max=chart1_xmax,
+        ylim_min=chart1_ymin,
+        ylim_max=chart1_ymax,
+    )
     figures["Chart1_Strength_vs_wc.png"] = fig1
-    st.pyplot(fig1)
+    st.pyplot(fig1, use_container_width=not constant_graph_size)
 
 with tab2:
     st.subheader("Chart 2: SRF vs w/c Ratio")
     fig2 = plot_chart2(chart2_df, grade, reference_wc, selected_rca, selected_wc)
     figures["Chart2_SRF_vs_wc.png"] = fig2
-    st.pyplot(fig2)
+    st.pyplot(fig2, use_container_width=not constant_graph_size)
 
 with tab3:
     st.subheader("Chart 3: Cement Compensation")
@@ -991,23 +1029,23 @@ with tab3:
     with ctab1:
         fig3a = plot_chart3_delta(chart3_df, grade, target, selected_rca, selected_wc)
         figures["Chart3A_Delta_Cement_vs_wc.png"] = fig3a
-        st.pyplot(fig3a)
+        st.pyplot(fig3a, use_container_width=not constant_graph_size)
     with ctab2:
         fig3b = plot_chart3_ccomp(chart3_df, grade, selected_rca, selected_wc)
         figures["Chart3B_Compensated_Cement_vs_wc.png"] = fig3b
-        st.pyplot(fig3b)
+        st.pyplot(fig3b, use_container_width=not constant_graph_size)
 
 with tab4:
     st.subheader("Chart 4: Dynamic Grade-Wise 4-Axis Chart")
     fig4 = plot_chart4(chart4_df, grade, selected_rca, selected_wc, slump, aggregate_size, wa_axis_min, wa_axis_max)
     figures["Chart4_Dynamic_4Axis.png"] = fig4
-    st.pyplot(fig4)
+    st.pyplot(fig4, use_container_width=not constant_graph_size)
 
 with tab5:
     st.subheader("Chart 5: RCA Quality Check")
     fig5, quality, note = plot_chart5(sg_rca, rca_wa, chart5_xmin, chart5_xmax, chart5_ymin, chart5_ymax, show_reference_points)
     figures["Chart5_RCA_Quality_Check.png"] = fig5
-    st.pyplot(fig5)
+    st.pyplot(fig5, use_container_width=not constant_graph_size)
     c1, c2, c3 = st.columns(3)
     c1.metric("RCA SG", f"{sg_rca:.2f}")
     c2.metric("RCA WA", f"{rca_wa:.3f}%")
@@ -1018,7 +1056,7 @@ with tab6:
     st.subheader("Chart 6: Extra Absorption Water vs RCA Replacement")
     fig6 = plot_chart6(chart6_df, grade, selected_rca, selected_wc, rca_wa, rca_mc)
     figures["Chart6_Extra_Absorption_Water.png"] = fig6
-    st.pyplot(fig6)
+    st.pyplot(fig6, use_container_width=not constant_graph_size)
 
 with tab_data:
     st.subheader("Selected design summary")
