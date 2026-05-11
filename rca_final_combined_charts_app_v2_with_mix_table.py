@@ -12,7 +12,73 @@ st.set_page_config(
     page_icon="🏗️",
     layout="wide"
 )
+def add_bg_video(video_path):
+    video_file = Path(video_path)
 
+    if not video_file.exists():
+        st.warning(f"Background video not found: {video_path}")
+        return
+
+    video_bytes = video_file.read_bytes()
+    encoded_video = base64.b64encode(video_bytes).decode()
+
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background: transparent;
+        }}
+
+        #bg-video {{
+            position: fixed;
+            right: 0;
+            bottom: 0;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            z-index: -2;
+            object-fit: cover;
+        }}
+
+        #bg-overlay {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.72);
+            z-index: -1;
+        }}
+
+        [data-testid="stHeader"] {{
+            background: rgba(0, 0, 0, 0);
+        }}
+
+        [data-testid="stSidebar"] {{
+            background: rgba(20, 20, 30, 0.88);
+        }}
+
+        .block-container {{
+            background: rgba(10, 10, 18, 0.72);
+            padding: 2rem;
+            border-radius: 18px;
+        }}
+
+        h1, h2, h3, h4, h5, h6, p, label, span, div {{
+            color: white;
+        }}
+        </style>
+
+        <video autoplay muted loop id="bg-video">
+            <source src="data:video/mp4;base64,{encoded_video}" type="video/mp4">
+        </video>
+
+        <div id="bg-overlay"></div>
+        """,
+        unsafe_allow_html=True
+    )
+add_bg_video("background.mp4")
 # ============================================================
 # COMMON GRADE DATA
 # ============================================================
