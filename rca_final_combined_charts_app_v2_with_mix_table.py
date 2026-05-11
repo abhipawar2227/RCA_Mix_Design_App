@@ -91,8 +91,17 @@ def slump_corrected_water(w50, slump):
     return w50 * (1 + 0.03 * ((slump - 50.0) / 25.0))
 
 
-def compensated_cement(water_eff, selected_wc, target, predicted_strength, min_cement=0.0, max_cement=9999.0):
-    cbase = water_eff / selected_wc
+def compensated_cement(
+    w50,
+    water_eff,
+    selected_wc,
+    target,
+    predicted_strength,
+    min_cement=0.0,
+    max_cement=9999.0
+):
+    # Base cement is calculated using 50 mm slump base water
+    cbase = w50 / selected_wc
 
     if predicted_strength <= 0:
         ccomp = cbase
@@ -102,8 +111,12 @@ def compensated_cement(water_eff, selected_wc, target, predicted_strength, min_c
         ccomp = cbase * (target / predicted_strength)
 
     ccomp = min(max(ccomp, min_cement), max_cement)
+
     delta = ccomp - cbase
+
+    # Effective w/c after compensation uses slump-corrected effective water
     wc_equiv = water_eff / ccomp if ccomp != 0 else np.nan
+
     return cbase, ccomp, delta, wc_equiv
 
 
