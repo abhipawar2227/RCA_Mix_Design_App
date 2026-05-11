@@ -91,16 +91,17 @@ def slump_corrected_water(w50, slump):
     return w50 * (1 + 0.03 * ((slump - 50.0) / 25.0))
 
 
-def compensated_cement(
-    w50,
-    water_eff,
-    selected_wc,
-    target,
-    predicted_strength,
-    min_cement=0.0,
-    max_cement=9999.0
-):
-    # Base cement is calculated using 50 mm slump base water
+def compensated_cement(w50, water_eff, selected_wc, target, predicted_strength, min_cement=0.0, max_cement=9999.0):
+    """
+    Corrected cement compensation logic.
+
+    Base cement is calculated using the 50 mm slump base water:
+        Cbase = W50 / selected_wc
+
+    Effective/slump-corrected water is still used for:
+        wc_equiv = water_eff / ccomp
+        batching water calculations
+    """
     cbase = w50 / selected_wc
 
     if predicted_strength <= 0:
@@ -111,12 +112,8 @@ def compensated_cement(
         ccomp = cbase * (target / predicted_strength)
 
     ccomp = min(max(ccomp, min_cement), max_cement)
-
     delta = ccomp - cbase
-
-    # Effective w/c after compensation uses slump-corrected effective water
     wc_equiv = water_eff / ccomp if ccomp != 0 else np.nan
-
     return cbase, ccomp, delta, wc_equiv
 
 
@@ -163,14 +160,14 @@ def fig_to_png(fig):
 # DATA GENERATION FUNCTIONS
 # ============================================================
 
-def generate_chart1_data(grade, grade_target, grade_ref_wc, water_eff, wc_min, wc_max, wc_step, rca_interval, constants):
+def generate_chart1_data(grade, grade_target, grade_ref_wc, w50, water_eff, wc_min, wc_max, wc_step, rca_interval, constants):
     wc_values = np.round(np.arange(wc_min, wc_max + 0.0001, wc_step), 3)
     rca_levels = list(range(0, 101, rca_interval))
     rows = []
 
     for rca in rca_levels:
         for wc in wc_values:
-            C = water_eff / wc
+            C = w50 / wc
             fc = predicted_strength_grade(wc, rca, grade_target, grade_ref_wc, constants)
             rows.append({
                 "Grade": grade,
@@ -185,7 +182,7 @@ def generate_chart1_data(grade, grade_target, grade_ref_wc, water_eff, wc_min, w
     return pd.DataFrame(rows)
 
 
-def generate_chart2_data(grade, grade_target, grade_ref_wc, water_eff, wc_min, wc_max, wc_step, rca_interval, constants):
+def generate_chart2_data(grade, grade_target, grade_ref_wc, w50, water_eff, wc_min, wc_max, wc_step, rca_interval, constants):
     wc_values = np.round(np.arange(wc_min, wc_max + 0.0001, wc_step), 3)
     rca_levels = list(range(0, 101, rca_interval))
     rows = []
@@ -196,7 +193,7 @@ def generate_chart2_data(grade, grade_target, grade_ref_wc, water_eff, wc_min, w
         for rca in rca_levels:
             f_rca = predicted_strength_grade(wc, rca, grade_target, grade_ref_wc, constants)
             srf = f_rca / f_control if f_control != 0 else np.nan
-            cement = water_eff / wc
+            cement = w50 / wc
             rows.append({
                 "Grade": grade,
                 "w/c ratio": wc,
@@ -212,7 +209,7 @@ def generate_chart2_data(grade, grade_target, grade_ref_wc, water_eff, wc_min, w
     return pd.DataFrame(rows)
 
 
-def generate_chart3_data(grade, grade_target, grade_ref_wc, water_eff, wc_min, wc_max, wc_step, rca_interval, constants):
+def generate_chart3_data(grade, grade_target, grade_ref_wc, w50, water_eff, wc_min, wc_max, wc_step, rca_interval, constants):
     wc_values = np.round(np.arange(wc_min, wc_max + 0.0001, wc_step), 3)
     rca_levels = list(range(0, 101, rca_interval))
     rows = []
@@ -220,7 +217,7 @@ def generate_chart3_data(grade, grade_target, grade_ref_wc, water_eff, wc_min, w
     for rca in rca_levels:
         for wc in wc_values:
             f_pred = predicted_strength_grade(wc, rca, grade_target, grade_ref_wc, constants)
-            Cbase = water_eff / wc
+            Cbase = w50 / wc
 
             if f_pred >= grade_target:
                 Ccomp = Cbase
@@ -257,7 +254,7 @@ def generate_chart4_data(grade, fck, s, target, grade_ref_wc, selected_wc, w50, 
     for rca in range(0, 101, rca_interval):
         f_pred = predicted_strength_grade(selected_wc, rca, target, grade_ref_wc, constants)
         cbase, ccomp, delta_c, wc_equiv = compensated_cement(
-            water_eff, selected_wc, target, f_pred, min_cement, max_cement
+            w50, water_eff, selected_wc, target, f_pred, min_cement, max_cement
         )
 
         mix = absolute_volume_mix(ccomp, water_eff, air_percent, sg_cement, sg_fa, sg_nca, sg_rca, ca_fraction, rca)
@@ -363,7 +360,7 @@ def plot_chart1(df, grade, target, reference_wc, selected_rca, selected_wc, wate
     ax.set_title(
         f"{grade} Predictive Strength vs w/c Ratio\n"
         f"Base chart: {slump_basis:.0f} mm slump, {aggregate_size:.0f} mm aggregate, "
-        f"W_eff = {water_eff:.0f} kg/m³, C = {water_eff:.0f}/(w/c)",
+        f"W_eff = {water_eff:.2f} kg/m³; cement table uses W50/(w/c)",
         fontsize=13,
     )
     ax.set_xlabel("Water-cement ratio")
@@ -693,6 +690,7 @@ def make_final_mix_table(
     target,
     selected_wc,
     selected_rca,
+    w50,
     chart4_df,
     chart6_df,
     rca_wa,
@@ -737,6 +735,7 @@ def make_final_mix_table(
         {"Item": "Base cement content", "Value": f"{cbase:.2f}", "Unit": "kg/m³"},
         {"Item": "Additional cement, ΔC", "Value": f"{delta_c:.2f}", "Unit": "kg/m³"},
         {"Item": "Final compensated cement", "Value": f"{ccomp:.2f}", "Unit": "kg/m³"},
+        {"Item": "Base water W50 used for cement calculation", "Value": f"{w50:.2f}", "Unit": "kg/m³"},
         {"Item": "Effective water", "Value": f"{water_eff:.2f}", "Unit": "kg/m³"},
         {"Item": "Extra absorption water", "Value": f"{extra_water:.2f}", "Unit": "kg/m³"},
         {"Item": "Free surface water correction", "Value": f"{free_water:.2f}", "Unit": "kg/m³"},
@@ -801,7 +800,7 @@ def make_final_mix_table(
 st.title("RCA Mix Design Charts Automation")
 st.write(
     "Combined app for Charts 1–6 using one common input panel. "
-    "Charts 1–4 and 6 are dynamic for M20–M40. Chart 5 checks RCA material quality."
+    "Charts 1–4 and 6 are dynamic for M20–M40. Chart 5 checks RCA material quality. Cement base uses W50/selected w/c; batching water uses slump-corrected W_eff."
 )
 
 with st.sidebar:
@@ -882,9 +881,9 @@ constants = {
 }
 
 # Generate all data once
-chart1_df = generate_chart1_data(grade, target, reference_wc, water_eff_chart, wc_min, wc_max, wc_step, rca_interval, constants)
-chart2_df = generate_chart2_data(grade, target, reference_wc, water_eff_chart, wc_min, wc_max, wc_step, rca_interval, constants)
-chart3_df = generate_chart3_data(grade, target, reference_wc, water_eff_chart, wc_min, wc_max, wc_step, rca_interval, constants)
+chart1_df = generate_chart1_data(grade, target, reference_wc, w50, water_eff_chart, wc_min, wc_max, wc_step, rca_interval, constants)
+chart2_df = generate_chart2_data(grade, target, reference_wc, w50, water_eff_chart, wc_min, wc_max, wc_step, rca_interval, constants)
+chart3_df = generate_chart3_data(grade, target, reference_wc, w50, water_eff_chart, wc_min, wc_max, wc_step, rca_interval, constants)
 chart4_df = generate_chart4_data(
     grade, fck, s, target, reference_wc, selected_wc, w50, slump, air_percent, sg_cement, sg_fa,
     sg_nca, sg_rca, rca_wa, ca_fraction, rca_interval, constants, min_cement, max_cement
@@ -962,6 +961,7 @@ with tab_data:
         target=target,
         selected_wc=selected_wc,
         selected_rca=selected_rca,
+        w50=w50,
         chart4_df=chart4_df,
         chart6_df=chart6_df,
         rca_wa=rca_wa,
@@ -1024,7 +1024,8 @@ with tab_data:
             "Selected w/c": selected_wc,
             "Selected RCA (%)": selected_rca,
             "Slump (mm)": slump,
-            "W_eff (kg/m3)": water_eff_chart,
+            "W50 base water (kg/m3)": w50,
+            "W_eff slump-corrected water (kg/m3)": water_eff_chart,
             "Ccomp (kg/m3)": selected_c,
             "RCA (kg/m3)": selected_rca_mass,
             "NCA (kg/m3)": selected_nca,
